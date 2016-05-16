@@ -1,0 +1,58 @@
+From f7236cfe8e872f51c02286379e2b6faaf145d9c7 Mon Sep 17 00:00:00 2001
+From: Ryan Volz <rvolz@mit.edu>
+Date: Tue, 9 Feb 2016 13:27:14 -0500
+Subject: [PATCH 1/2] usrp2: Fix rounding to nearest when nearest would
+ overflow.
+
+This requires a further change to meet timing requirements: swap the
+order of round->clip to clip->round at small_hb_dec output so the
+rounding output is 1 fewer bit wide, saving a level of logic. This
+loses the sigma-delta rounding information for the clipped bit.
+---
+ usrp2/sdr_lib/round.v        | 4 ++--
+ usrp2/sdr_lib/small_hb_dec.v | 9 +++++----
+ 2 files changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/usrp2/sdr_lib/round.v b/usrp2/sdr_lib/round.v
+index 26d5a4c..119ae34 100644
+--- a/usrp2/sdr_lib/round.v
++++ b/usrp2/sdr_lib/round.v
+@@ -39,8 +39,8 @@ module round
+    assign 			 round_corr_nearest = in[bits_in-bits_out-1];
+ 
+    generate
+-      if(bits_in-bits_out > 1)
+-	assign 			 round_corr_nearest_safe = (~in[bits_in-1] & (&in[bits_in-2:bits_out])) ? 0 :
++      if(bits_out > 1)
++	assign 			 round_corr_nearest_safe = (~in[bits_in-1] & (&in[bits_in-2:bits_in-bits_out])) ? 0 :
+ 				 round_corr_nearest;
+       else
+ 	assign round_corr_nearest_safe = round_corr_nearest;
+diff --git a/usrp2/sdr_lib/small_hb_dec.v b/usrp2/sdr_lib/small_hb_dec.v
+index f4f927b..f72e61f 100644
+--- a/usrp2/sdr_lib/small_hb_dec.v
++++ b/usrp2/sdr_lib/small_hb_dec.v
+@@ -120,15 +120,16 @@ module small_hb_dec
+      else if(go_d3)
+        accum <= accum + prod_acc_rnd;
+    
+-   wire [WIDTH:0] 	 accum_rnd;
++   wire [ACCWIDTH-2:0] 	 accum_clip;
+    wire [WIDTH-1:0] 	 accum_rnd_clip;
+    
+    wire 	 stb_round;
+    
+-   round_sd #(.WIDTH_IN(ACCWIDTH),.WIDTH_OUT(WIDTH+1)) round_acc 
+-     (.clk(clk), .reset(rst), .in(accum), .strobe_in(go_d4), .out(accum_rnd), .strobe_out(stb_round));
++   clip #(.bits_in(ACCWIDTH),.bits_out(ACCWIDTH-1)) clip (.in(accum), .out(accum_clip));
++
++   round_sd #(.WIDTH_IN(ACCWIDTH-1),.WIDTH_OUT(WIDTH)) round_acc
++     (.clk(clk), .reset(rst), .in(accum_clip), .strobe_in(go_d4), .out(accum_rnd_clip), .strobe_out(stb_round));
+ 
+-   clip #(.bits_in(WIDTH+1),.bits_out(WIDTH)) clip (.in(accum_rnd), .out(accum_rnd_clip));
+    
+    // Output
+    always @(posedge clk)
+-- 
+1.9.1
+

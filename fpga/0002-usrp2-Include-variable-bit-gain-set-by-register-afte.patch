@@ -1,0 +1,374 @@
+From 675279d24c0e645f7000ae129947b6fe7c553b6a Mon Sep 17 00:00:00 2001
+From: Ryan Volz <rvolz@mit.edu>
+Date: Tue, 8 Dec 2015 15:53:55 -0500
+Subject: [PATCH 2/2] usrp2: Include variable bit gain set by register after
+ CIC filter.
+
+Decimation by N creates a possible log2(N)/2 bits of additional
+precision. Currently, this extra precision is lost in the DDC chain by
+internal conversions down to 17-18 bits from 24 bits for multiplication.
+This patch inserts a variable bit gain after the CIC filter and before
+any of the decimation precision is lost, allowing that precision to be
+kept at the expense of higher order bits. When the signal levels are low
+enough so that the higher order bits are not used, this is a great
+tradeoff to make.
+
+Using this requires a change to the UHD host code to specify the bit
+gain.
+
+This commit adds variable bitgain with clipping as a separate module
+(variable_part_select_and_clip) that is called from the cic decimator.
+The cic_dec_shifter module was modified so that a multiplexer is
+inferred, reducing its footprint. The cic decimator pipeline was also
+fixed so that the strobe matches the earliest valid output, and an
+additional pipeline stage was added for the variable bitgain in order to
+meet timing requirements.
+---
+ usrp2/sdr_lib/Makefile.srcs                   |  1 +
+ usrp2/sdr_lib/cic_dec_shifter.v               | 63 ++++++++--------------
+ usrp2/sdr_lib/cic_decim.v                     | 59 ++++++++++++++-------
+ usrp2/sdr_lib/ddc_chain.v                     | 15 +++---
+ usrp2/sdr_lib/variable_part_select_and_clip.v | 75 +++++++++++++++++++++++++++
+ 5 files changed, 147 insertions(+), 66 deletions(-)
+ create mode 100644 usrp2/sdr_lib/variable_part_select_and_clip.v
+
+diff --git a/usrp2/sdr_lib/Makefile.srcs b/usrp2/sdr_lib/Makefile.srcs
+index e6c4c53..9d30616 100644
+--- a/usrp2/sdr_lib/Makefile.srcs
++++ b/usrp2/sdr_lib/Makefile.srcs
+@@ -40,6 +40,7 @@ sign_extend.v \
+ small_hb_dec.v \
+ small_hb_int.v \
+ tx_frontend.v \
++variable_part_select_and_clip.v \
+ dsp_tx_glue.v \
+ dsp_rx_glue.v \
+ ))
+diff --git a/usrp2/sdr_lib/cic_dec_shifter.v b/usrp2/sdr_lib/cic_dec_shifter.v
+index aa5ac89..2a949b4 100644
+--- a/usrp2/sdr_lib/cic_dec_shifter.v
++++ b/usrp2/sdr_lib/cic_dec_shifter.v
+@@ -23,13 +23,14 @@
+ // NOTE   This only works for N=4, max decim rate of 128
+ // NOTE   signal "rate" is EQUAL TO the actual rate, no more -1 BS
+ 
+-module cic_dec_shifter(rate,signal_in,signal_out);
+-   parameter bw = 16;
+-   parameter maxbitgain = 28;
+-
+-   input [7:0] rate;
+-   input       wire [bw+maxbitgain-1:0] signal_in;
+-   output      reg [bw-1:0] signal_out;
++module cic_dec_shifter
++   #(parameter bw = 16, maxbitgain = 28)
++     (input clk,
++      input [7:0] rate,
++      input strobe_in,
++      output reg strobe_out,
++      input [bw+maxbitgain-1:0] signal_in,
++      output reg [bw-1:0] signal_out);
+ 
+    function [4:0] bitgain;
+       input [7:0] rate;
+@@ -43,7 +44,7 @@ module cic_dec_shifter(rate,signal_in,signal_out);
+ 	8'd32 : bitgain = 20;
+ 	8'd64 : bitgain = 24;
+ 	8'd128 : bitgain = 28;
+-	
++
+ 	// Nearest without overflow -- ceil(N*log2(rate))
+ 	8'd3 : bitgain = 7;
+ 	8'd5 : bitgain = 10;
+@@ -67,40 +68,18 @@ module cic_dec_shifter(rate,signal_in,signal_out);
+ 	default : bitgain = 28;
+       endcase // case(rate)
+    endfunction // bitgain
+-   
+-   wire [4:0] 	  shift = bitgain(rate);
+-   
+-   // We should be able to do this, but can't ....
+-   // assign 	  signal_out = signal_in[shift+bw-1:shift];
+-   
+-   always @*
+-     case(shift)
+-       5'd0  : signal_out = signal_in[0+bw-1:0];
+-       5'd4  : signal_out = signal_in[4+bw-1:4];
+-       5'd7  : signal_out = signal_in[7+bw-1:7];
+-       5'd8  : signal_out = signal_in[8+bw-1:8];
+-       5'd10 : signal_out = signal_in[10+bw-1:10];
+-       5'd11 : signal_out = signal_in[11+bw-1:11];
+-       5'd12 : signal_out = signal_in[12+bw-1:12];
+-       5'd13 : signal_out = signal_in[13+bw-1:13];
+-       5'd14 : signal_out = signal_in[14+bw-1:14];
+-       5'd15 : signal_out = signal_in[15+bw-1:15];
+-       5'd16 : signal_out = signal_in[16+bw-1:16];
+-       5'd17 : signal_out = signal_in[17+bw-1:17];
+-       5'd18 : signal_out = signal_in[18+bw-1:18];
+-       5'd19 : signal_out = signal_in[19+bw-1:19];
+-       5'd20 : signal_out = signal_in[20+bw-1:20];
+-       5'd21 : signal_out = signal_in[21+bw-1:21];
+-       5'd22 : signal_out = signal_in[22+bw-1:22];
+-       5'd23 : signal_out = signal_in[23+bw-1:23];
+-       5'd24 : signal_out = signal_in[24+bw-1:24];
+-       5'd25 : signal_out = signal_in[25+bw-1:25];
+-       5'd26 : signal_out = signal_in[26+bw-1:26];
+-       5'd27 : signal_out = signal_in[27+bw-1:27];
+-       5'd28 : signal_out = signal_in[28+bw-1:28];
+-       
+-       default : signal_out = signal_in[28+bw-1:28];
+-     endcase // case(shift)
++
++   // use register for shift to limit delay
++   // force user encoding so signal_out can be inferred as a multiplexer
++   (* signal_encoding = "user" *)
++   reg [4:0] shift;
++   always @(posedge clk)
++     shift <= bitgain(rate);
++
++   always @(posedge clk) begin
++     signal_out <= signal_in[shift +: bw];
++     strobe_out <= strobe_in;
++   end
+ 
+ endmodule // cic_dec_shifter
+ 
+diff --git a/usrp2/sdr_lib/cic_decim.v b/usrp2/sdr_lib/cic_decim.v
+index e6b6e95..927af5e 100755
+--- a/usrp2/sdr_lib/cic_decim.v
++++ b/usrp2/sdr_lib/cic_decim.v
+@@ -26,24 +26,27 @@ module cic_decim
+      input reset,
+      input enable,
+      input [7:0] rate,
++     input [2:0] gain_bits,
+      input strobe_in,
+-     input strobe_out,
++     input strobe_diff,
++     output strobe_out,
+      input [bw-1:0] signal_in,
+-     output reg [bw-1:0] signal_out);
++     output [bw-1:0] signal_out);
+ 
+    localparam 	     maxbitgain = N * log2_of_max_rate;
+-   
++
+    wire [bw+maxbitgain-1:0] signal_in_ext;
+    reg [bw+maxbitgain-1:0]  integrator [0:N-1];
+    reg [bw+maxbitgain-1:0]  differentiator [0:N-1];
+    reg [bw+maxbitgain-1:0]  pipeline [0:N-1];
+    reg [bw+maxbitgain-1:0]  sampler;
+-   
++   reg strobe_pipeline;
++
+    integer 		    i;
+-   
+-   sign_extend #(bw,bw+maxbitgain) 
++
++   sign_extend #(bw,bw+maxbitgain)
+      ext_input (.in(signal_in),.out(signal_in_ext));
+-   
++
+    always @(posedge clock)
+      if(~enable)
+        for(i=0;i<N;i=i+1)
+@@ -53,8 +56,8 @@ module cic_decim
+ 	  integrator[0] <= integrator[0] + signal_in_ext;
+ 	  for(i=1;i<N;i=i+1)
+ 	    integrator[i] <= integrator[i] + integrator[i-1];
+-       end	
+-   
++       end
++
+    always @(posedge clock)
+      if(~enable)
+        begin
+@@ -65,7 +68,7 @@ module cic_decim
+ 	       differentiator[i] <= 0;
+ 	    end
+        end
+-     else if (strobe_out)
++     else if (strobe_diff)
+        begin
+ 	  sampler <= integrator[N-1];
+ 	  differentiator[0] <= sampler;
+@@ -75,14 +78,34 @@ module cic_decim
+ 	       differentiator[i] <= pipeline[i-1];
+ 	       pipeline[i] <= pipeline[i-1] - differentiator[i];
+ 	    end
+-       end // if (enable && strobe_out)
+-   
+-   wire [bw-1:0] signal_out_unreg;
+-   
+-   cic_dec_shifter #(bw)
+-     cic_dec_shifter(rate,pipeline[N-1],signal_out_unreg);
++       end // if (enable && strobe_diff)
+ 
++   // advance strobe to account for pipeline delay
+    always @(posedge clock)
+-     signal_out <= signal_out_unreg;
+-   
++     strobe_pipeline <= strobe_diff;
++
++   // pad to allow for added gain when shift from decimation is small
++   localparam gainwidth = 3;
++   localparam padbits = 2**gainwidth-1;
++   localparam paddedbw = bw + maxbitgain + padbits;
++
++   wire [paddedbw-1:0] signal_pad = {pipeline[N-1], {padbits{1'b0}}};
++   wire [bw+padbits-1:0] signal_shifted;
++   wire strobe_shifted;
++
++   cic_dec_shifter #(bw+padbits)
++     cic_dec_shifter(.clk(clock),.rate(rate),
++                     .strobe_in(strobe_pipeline),.strobe_out(strobe_shifted),
++                     .signal_in(signal_pad),.signal_out(signal_shifted));
++
++   // use register for gainidx to limit delay
++   reg [gainwidth-1:0] gainidx;
++   always @(posedge clock)
++     gainidx <= padbits - gain_bits;
++
++   // apply variable gain by selecting appropriate part of signal_shifted and clipping
++   variable_part_select_and_clip #(.WIDTH_IN(bw+padbits),.WIDTH_OUT(bw),.INDEX_WIDTH(gainwidth))
++     vargain(.clk(clock),.strobe_in(strobe_shifted),.strobe_out(strobe_out),
++             .signal_in(signal_shifted),.lowidx(gainidx),.signal_out(signal_out));
++
+ endmodule // cic_decim
+diff --git a/usrp2/sdr_lib/ddc_chain.v b/usrp2/sdr_lib/ddc_chain.v
+index dff3d4e..f3e638b 100644
+--- a/usrp2/sdr_lib/ddc_chain.v
++++ b/usrp2/sdr_lib/ddc_chain.v
+@@ -46,13 +46,14 @@ module ddc_chain
+    reg [31:0]  phase;
+ 
+    wire [17:0] scale_factor;
++   wire [2:0]  gain_bits;
+    wire [cwidth-1:0] i_cordic, q_cordic;
+    wire [WIDTH-1:0] i_cordic_clip, q_cordic_clip;
+    wire [WIDTH-1:0] i_cic, q_cic;
+    wire [WIDTH-1:0] i_hb1, q_hb1;
+    wire [WIDTH-1:0] i_hb2, q_hb2;
+    
+-   wire        strobe_cic, strobe_hb1, strobe_hb2;
++   wire        strobe_slow, strobe_cic, strobe_hb1, strobe_hb2;
+    wire        enable_hb1, enable_hb2;
+    wire [7:0]  cic_decim_rate;
+ 
+@@ -64,9 +65,9 @@ module ddc_chain
+      (.clk(clk),.rst(rst),.strobe(set_stb),.addr(set_addr),
+       .in(set_data),.out(phase_inc),.changed());
+ 
+-   setting_reg #(.my_addr(BASE+1), .width(18)) sr_1
++   setting_reg #(.my_addr(BASE+1), .width(21)) sr_1
+      (.clk(clk),.rst(rst),.strobe(set_stb),.addr(set_addr),
+-      .in(set_data),.out(scale_factor),.changed());
++      .in(set_data),.out({gain_bits, scale_factor}),.changed());
+ 
+    setting_reg #(.my_addr(BASE+2), .width(10)) sr_2
+      (.clk(clk),.rst(rst),.strobe(set_stb),.addr(set_addr),
+@@ -118,16 +119,18 @@ module ddc_chain
+ 
+    // CIC decimator  24 bit I/O
+    cic_strober cic_strober(.clock(clk),.reset(rst),.enable(ddc_enb),.rate(cic_decim_rate),
+-			   .strobe_fast(1),.strobe_slow(strobe_cic) );
++			   .strobe_fast(1),.strobe_slow(strobe_slow) );
+ 
+    cic_decim #(.bw(WIDTH))
+      decim_i (.clock(clk),.reset(rst),.enable(ddc_enb),
+-	      .rate(cic_decim_rate),.strobe_in(1'b1),.strobe_out(strobe_cic),
++	      .rate(cic_decim_rate),.gain_bits(gain_bits),
++	      .strobe_in(1'b1),.strobe_diff(strobe_slow),.strobe_out(strobe_cic),
+ 	      .signal_in(i_cordic_clip),.signal_out(i_cic));
+    
+    cic_decim #(.bw(WIDTH))
+      decim_q (.clock(clk),.reset(rst),.enable(ddc_enb),
+-	      .rate(cic_decim_rate),.strobe_in(1'b1),.strobe_out(strobe_cic),
++	      .rate(cic_decim_rate),.gain_bits(gain_bits),
++	      .strobe_in(1'b1),.strobe_diff(strobe_slow),.strobe_out(),
+ 	      .signal_in(q_cordic_clip),.signal_out(q_cic));
+ 
+    // First (small) halfband  24 bit I/O
+diff --git a/usrp2/sdr_lib/variable_part_select_and_clip.v b/usrp2/sdr_lib/variable_part_select_and_clip.v
+new file mode 100644
+index 0000000..e6b5834
+--- /dev/null
++++ b/usrp2/sdr_lib/variable_part_select_and_clip.v
+@@ -0,0 +1,75 @@
++// -*- verilog -*-
++//
++//  USRP - Universal Software Radio Peripheral
++//
++//  Copyright (C) 2016 Ryan Volz
++//
++//  This program is free software; you can redistribute it and/or modify
++//  it under the terms of the GNU General Public License as published by
++//  the Free Software Foundation; either version 2 of the License, or
++//  (at your option) any later version.
++//
++//  This program is distributed in the hope that it will be useful,
++//  but WITHOUT ANY WARRANTY; without even the implied warranty of
++//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++//  GNU General Public License for more details.
++//
++//  You should have received a copy of the GNU General Public License
++//  along with this program; if not, write to the Free Software
++//  Foundation, Inc., 51 Franklin Street, Boston, MA  02110-1301  USA
++//
++
++
++module variable_part_select_and_clip
++  #(parameter WIDTH_IN=31, WIDTH_OUT=24, INDEX_WIDTH=3)
++    (input clk,
++     input strobe_in,
++     output reg strobe_out,
++     input [WIDTH_IN-1:0] signal_in,
++     input [INDEX_WIDTH-1:0] lowidx,
++     output reg [WIDTH_OUT-1:0] signal_out);
++
++   localparam MASKBW = WIDTH_IN - WIDTH_OUT;
++
++   // isolate bits to be clipped and determine if an overflow would occur
++   wire [MASKBW:0] head = signal_in[WIDTH_IN-1 -: MASKBW+1];
++
++   // bit order reversed so we can read in reverse
++   reg [0:MASKBW+MASKBW-1] maskrom = {{MASKBW{1'b1}}, {MASKBW{1'b0}}};
++
++   function [MASKBW-1:0] clipmask;
++      input [INDEX_WIDTH-1:0] idx;
++      clipmask = maskrom[MASKBW-1+idx -: MASKBW];
++// with MASKBW == 7 and INDEX_WIDTH ==3, this is equivalent to the following:
++//    case(idx)
++//      3'd0 : clipmask = 7'b1111111;
++//      3'd1 : clipmask = 7'b1111110;
++//      3'd2 : clipmask = 7'b1111100;
++//      3'd3 : clipmask = 7'b1111000;
++//      3'd4 : clipmask = 7'b1110000;
++//      3'd5 : clipmask = 7'b1100000;
++//      3'd6 : clipmask = 7'b1000000;
++//      default : clipmask = 7'b0000000;
++//    endcase
++   endfunction
++
++   // use register for mask to limit delay
++   reg [MASKBW-1:0] mask;
++   always @(posedge clk)
++     mask <= clipmask(lowidx);
++
++   wire overflow = |((head[MASKBW-1:0] ^ {MASKBW{head[MASKBW]}}) & mask);
++
++   // apply part selection and clip if necessary
++   wire [WIDTH_OUT-1:0] clipped = signal_in[WIDTH_IN-1] ?
++                                    {1'b1, {(WIDTH_OUT-1){1'b0}}} :
++                                    {1'b0, {(WIDTH_OUT-1){1'b1}}};
++
++   wire [WIDTH_OUT-1:0] signal_selected = signal_in[lowidx +: WIDTH_OUT];
++
++   always @(posedge clk) begin
++     signal_out <= overflow ? clipped : signal_selected;
++     strobe_out <= strobe_in;
++   end
++
++endmodule // variable_part_select_and_clip
+-- 
+1.9.1
+
