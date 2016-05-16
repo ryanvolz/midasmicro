@@ -1,0 +1,6 @@
+[submodule "digital_rf"]
+	path = digital_rf
+	url = https://github.com/ryanvolz/digital_rf.git
+[submodule "gr-drf"]
+	path = gr-drf
+	url = https://github.com/ryanvolz/gr-drf.git
