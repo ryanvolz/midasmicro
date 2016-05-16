@@ -7,3 +7,6 @@
 [submodule "python_libs"]
 	path = python_libs
 	url = https://github.com/jvierine/python_libs.git
+[submodule "tosr0x"]
+	path = tosr0x
+	url = https://github.com/amorphic/tosr0x.git

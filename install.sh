@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# install gnuradio
+## install gnuradio
 sudo apt-get install -y gnuradio-dev
 
-# install patched uhd
+## install patched uhd
 sudo dpkg -i uhd-patched/*`lsb_release -cs`*.deb
 sudo apt-get install -fy
 
-# make sure submodules are up to date
+## make sure submodules are up to date
 git submodule init
 git submodule update
 
@@ -49,3 +49,11 @@ sudo python setup.py install
 cd ../stuffr
 sudo python setup.py install
 cd ../..
+
+## install tosr0x
+# prerequisites
+sudo apt-get install -y python-serial
+# install
+cd tosr0x
+sudo python setup.py install
+echo 'SUBSYSTEM=="usb", MODE="0666", GROUP="dialout"' | sudo tee /etc/udev/rules.d/50-usb.rules
