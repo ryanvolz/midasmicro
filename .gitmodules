@@ -4,3 +4,6 @@
 [submodule "gr-drf"]
 	path = gr-drf
 	url = https://github.com/ryanvolz/gr-drf.git
+[submodule "python_libs"]
+	path = python_libs
+	url = https://github.com/jvierine/python_libs.git
