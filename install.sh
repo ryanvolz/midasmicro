@@ -56,6 +56,7 @@ sudo apt-get install -y python-serial
 # install
 cd tosr0x
 sudo python setup.py install
+sudo usermod -G dialout -a midasop
 echo 'SUBSYSTEM=="usb", MODE="0666", GROUP="dialout"' | sudo tee /etc/udev/rules.d/50-usb.rules
 cd ..
 
