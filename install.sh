@@ -57,3 +57,31 @@ sudo apt-get install -y python-serial
 cd tosr0x
 sudo python setup.py install
 echo 'SUBSYSTEM=="usb", MODE="0666", GROUP="dialout"' | sudo tee /etc/udev/rules.d/50-usb.rules
+cd ..
+
+## add NetworkManager connections
+sudo apt-get install -y network-manager
+sudo nmcli con add type wifi ifname "*" con-name midasmicro_wireless autoconnect yes \
+                   ssid midasmicro mode ap -- \
+                   +con.autoconnect-priority 1 +wifi-sec.key-mgmt wpa-psk +wifi-sec.psk mithaystack \
+                   +ipv4.method shared
+
+export MIDASMICRO_ETHDEV=`ls /sys/class/net | grep -m 1 ^enp`
+sudo nmcli con add type ethernet ifname $MIDASMICRO_ETHDEV con-name midasmicro_ethernet autoconnect yes -- \
+                   +con.autoconnect-priority 1 +ipv4.method manual \
+                   +ipv4.addresses 192.168.10.1/16 +ipv4.never-default true
+
+# install udhcpd for dhcp server when midasmicro_ethernet connection is active
+sudo apt-get install -y udhcpd
+# disable from starting at boot
+sudo systemctl disable udhcpd
+# enable running using init script
+sudo patch /etc/default/udhcpd udhcpd/udhcpd_default_enable.patch
+# replace config
+sed -e "s/MIDASMICRO_ETHDEV/$MIDASMICRO_ETHDEV/g" udhcpd/udhcpd.conf | sudo tee /etc/udhcpd.conf
+# set to use udhcpd when midasmicro_ethernet is active
+sudo cp udhcpd/10midasmicro_dhcp_server /etc/NetworkManager/dispatcher.d/
+
+# start new connections
+sudo nmcli con up id midasmicro_wireless
+sudo nmcli con up id midasmicro_ethernet
