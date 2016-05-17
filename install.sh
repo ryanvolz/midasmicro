@@ -63,7 +63,7 @@ cd ..
 ## add NetworkManager connections
 sudo apt-get install -y network-manager
 sudo nmcli con add type wifi ifname "*" con-name midasmicro_wireless autoconnect yes \
-                   ssid midasmicro mode ap -- \
+                   ssid `hostname` mode ap -- \
                    +con.autoconnect-priority 1 +wifi-sec.key-mgmt wpa-psk +wifi-sec.psk mithaystack \
                    +ipv4.method shared
 
