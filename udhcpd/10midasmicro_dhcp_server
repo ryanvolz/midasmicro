@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# copy to /etc/NetworkManager/dispatcher.d/
+# chown to root:root
+# and chmod to 755
+
+interface=$1 status=$2
+if [ "$CONNECTION_ID" = "midasmicro_ethernet" ]; then
+    case $status in
+        up)
+            systemctl start udhcpd
+            ;;
+        down)
+            systemctl stop udhcpd
+            ;;
+    esac
+fi
