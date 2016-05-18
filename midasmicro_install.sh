@@ -24,6 +24,7 @@ make
 # install
 sudo make install
 cd ..
+python setup.py build
 sudo python setup.py install
 cd ..
 
@@ -43,10 +44,13 @@ cd ../..
 ## install juha's python libs
 cd python_libs
 cd coord
+python setup.py build
 sudo python setup.py install
 cd ../sampler_util
+python setup.py build
 sudo python setup.py install
 cd ../stuffr
+python setup.py build
 sudo python setup.py install
 cd ../..
 
@@ -55,6 +59,7 @@ cd ../..
 sudo apt-get install -y python-serial
 # install
 cd tosr0x
+python setup.py build
 sudo python setup.py install
 sudo usermod -G dialout -a midasop
 echo 'SUBSYSTEM=="usb", MODE="0666", GROUP="dialout"' | sudo tee /etc/udev/rules.d/50-usb.rules
