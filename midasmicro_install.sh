@@ -91,3 +91,8 @@ sudo cp udhcpd/10midasmicro_dhcp_server /etc/NetworkManager/dispatcher.d/
 # start new connections
 sudo nmcli con up id midasmicro_wireless
 sudo nmcli con up id midasmicro_ethernet
+
+## set up mount directories for data disks and ringbuffer
+sudo mkdir -p /data0
+sudo mkdir -p /data1
+sudo mkdir -p /ram
