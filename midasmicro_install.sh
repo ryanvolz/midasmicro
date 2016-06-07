@@ -6,6 +6,7 @@ sudo apt-get install -y gnuradio-dev
 ## install patched uhd
 sudo dpkg -i uhd-patched/*`lsb_release -cs`*.deb
 sudo apt-get install -fy
+sudo usermod -G usrp -a midasop
 
 ## make sure submodules are up to date
 git submodule init
