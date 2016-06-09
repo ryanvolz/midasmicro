@@ -67,7 +67,7 @@ echo 'SUBSYSTEM=="usb", MODE="0666", GROUP="dialout"' | sudo tee /etc/udev/rules
 cd ..
 
 ## add NetworkManager connections
-sudo apt-get install -y network-manager
+sudo apt-get install -y network-manager network-manager-openvpn network-manager-ssh
 sudo nmcli con add type wifi ifname "*" con-name midasmicro_wireless autoconnect yes \
                    ssid `hostname` mode ap -- \
                    +con.autoconnect-priority 1 +wifi-sec.key-mgmt wpa-psk +wifi-sec.psk mithaystack \
