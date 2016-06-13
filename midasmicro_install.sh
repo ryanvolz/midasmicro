@@ -7,6 +7,13 @@ sudo apt-get install -y gnuradio-dev
 sudo dpkg -i uhd-patched/*`lsb_release -cs`*.deb
 sudo apt-get install -fy
 sudo usermod -G usrp -a midasop
+# replace rmem_max in sysctl config
+cat >>uhd-usrp2.conf <<'EOL'
+# USRP2 gigabit ethernet transport tuning
+net.core.rmem_max=100000000
+net.core.wmem_max=1048576
+EOL
+sudo mv uhd-usrp2.conf /etc/sysctl.d/uhd-usrp2.conf
 
 ## make sure submodules are up to date
 git submodule init
