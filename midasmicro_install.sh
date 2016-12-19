@@ -80,10 +80,19 @@ sudo nmcli con add type wifi ifname "*" con-name midasmicro_wireless autoconnect
                    +con.autoconnect-priority 1 +wifi-sec.key-mgmt wpa-psk +wifi-sec.psk mithaystack \
                    +ipv4.method shared
 
-export MIDASMICRO_ETHDEV=`ls /sys/class/net | grep -m 1 ^enp`
-sudo nmcli con add type ethernet ifname $MIDASMICRO_ETHDEV con-name midasmicro_ethernet autoconnect yes -- \
+export INTERNAL_ETHDEV=`ls /sys/class/net | grep -m 1 ^enp`
+sudo nmcli con add type ethernet ifname $INTERNAL_ETHDEV con-name internal_ethernet autoconnect yes -- \
                    +con.autoconnect-priority 1 +ipv4.method manual \
                    +ipv4.addresses 192.168.10.1/16 +ipv4.never-default true
+
+export MIDASMICRO_ETHDEV=`ls /sys/class/net | grep -m 1 ^enx`
+sudo nmcli con add type ethernet ifname $MIDASMICRO_ETHDEV con-name dhcp_ethernet autoconnect yes -- \
+                   +con.autoconnect-priority 2 +ipv4.method auto \
+                   +ipv4.dhcp-timeout 15 +ipv6.method ignore
+
+sudo nmcli con add type ethernet ifname $MIDASMICRO_ETHDEV con-name midasmicro_ethernet autoconnect yes -- \
+                   +con.autoconnect-priority 1 +ipv4.method manual \
+                   +ipv4.addresses 10.0.0.1/24 +ipv4.never-default true
 
 # install udhcpd for dhcp server when midasmicro_ethernet connection is active
 sudo apt-get install -y udhcpd
