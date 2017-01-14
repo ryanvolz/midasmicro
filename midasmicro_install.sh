@@ -109,7 +109,47 @@ sudo cp udhcpd/10midasmicro_dhcp_server /etc/NetworkManager/dispatcher.d/
 sudo nmcli con up id midasmicro_wireless
 sudo nmcli con up id midasmicro_ethernet
 
+## gpsd and ntpd
+sudo apt-get install ntp gpsd gpsd-clients
+sudo dpkg-reconfigure -plow gpsd
+
+# configure gpsd
+cat >>gpsd <<'EOL'
+# Default settings for the gpsd init script and the hotplug wrapper.
+
+# Start the gpsd daemon automatically at boot time
+START_DAEMON="true"
+
+# Use USB hotplugging to add new USB devices automatically to the daemon
+USBAUTO="true"
+
+# Devices gpsd should collect to at boot time.
+# They need to be read/writeable, either by user gpsd or the group dialout.
+DEVICES=""
+
+# Other options you want to pass to gpsd
+GPSD_OPTIONS="-n -F /var/run/gpsd.sock /dev/ttyUSB1"
+EOL
+sudo mv gpsd /etc/default/gpsd
+
+# configure ntpd
+sudo tee --append /etc/ntp.conf <<'EOL'
+
+server 127.127.28.0 minpoll 4 maxpoll 4
+fudge 127.127.28.0 time1 0.0 refid GPS
+
+server 127.127.28.1 minpoll 4 maxpoll 4 prefer
+fudge 127.127.28.1 refid PPS
+EOL
+
 ## set up mount directories for data disks and ringbuffer
-sudo mkdir -p /data0
-sudo mkdir -p /data1
-sudo mkdir -p /ram
+sudo mkdir -p /data
+sudo mkdir -p /data/ssd0
+sudo mkdir -p /data/ssd1
+sudo mkdir -p /data/ram
+
+## group setup
+sudo addgroup daq
+sudo adduser midasop daq
+sudo chown -R root:daq /data
+sudo chmod -R g+rw /data
