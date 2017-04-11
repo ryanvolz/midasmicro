@@ -110,7 +110,7 @@ sudo nmcli con up id midasmicro_wireless
 sudo nmcli con up id midasmicro_ethernet
 
 ## gpsd and ntpd
-sudo apt-get install ntp gpsd gpsd-clients
+sudo apt-get install -y ntp gpsd gpsd-clients
 sudo dpkg-reconfigure -plow gpsd
 
 # configure gpsd
