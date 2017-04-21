@@ -1,12 +1,6 @@
 [submodule "digital_rf"]
 	path = digital_rf
-	url = https://github.com/ryanvolz/digital_rf.git
-[submodule "gr-drf"]
-	path = gr-drf
-	url = https://github.com/ryanvolz/gr-drf.git
-[submodule "python_libs"]
-	path = python_libs
-	url = https://github.com/jvierine/python_libs.git
+	url = git@github.mit.edu:/rvolz/digital_rf.git
 [submodule "tosr0x"]
 	path = tosr0x
 	url = https://github.com/amorphic/tosr0x.git

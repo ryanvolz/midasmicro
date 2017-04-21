@@ -21,45 +21,17 @@ git submodule update
 
 ## install digital_rf
 # install prerequisites
-sudo apt-get install -y automake libtool python-pkgconfig libhdf5-dev python-numpy
+sudo apt-get install -y cmake libtool libhdf5-dev python-numpy python-dev swig doxygen python-watchdog python-tz python-dateutil
 # build
 cd digital_rf
-sh autogen.sh
 mkdir build
 cd build
-../configure
+cmake ..
 make
+make test
 # install
 sudo make install
-cd ..
-python setup.py build
-sudo python setup.py install
-cd ..
-
-## install gr-drf
-# install prerequisites
-sudo apt-get install -y cmake swig doxygen
-# build
-cd gr-drf
-mkdir build
-cd build
-cmake ../
-make
-# install
-sudo make install
-cd ../..
-
-## install juha's python libs
-cd python_libs
-cd coord
-python setup.py build
-sudo python setup.py install
-cd ../sampler_util
-python setup.py build
-sudo python setup.py install
-cd ../stuffr
-python setup.py build
-sudo python setup.py install
+sudo ldconfig
 cd ../..
 
 ## install tosr0x
